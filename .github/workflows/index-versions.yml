@@ -56,4 +56,4 @@ jobs:
     uses: ./.github/workflows/test-toolchain-compatibility.yml
     with:
       version-matrix: ${{ needs.compare-versions.outputs.version-matrix }}
-    if: ${{ needs.compare-versions.outputs.version-matrix != '{\"job\":['']}' }}
+    if: ${{ needs.compare-versions.outputs.version-matrix != '{\"job\":[]}' }}
