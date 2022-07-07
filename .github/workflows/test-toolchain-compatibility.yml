@@ -1,0 +1,118 @@
+name: Test toolchain compatibility (Latest)
+
+on:
+  workflow_call:
+    inputs:
+      version-matrix:
+        required: true
+        type: string
+
+env:
+  INCOMPATIBLE_DIR: ./incompatible-versions
+  LATEST_CHANNEL_DIR: ./channel-fuel-latest.toml.d/
+
+jobs:
+  test-toolchain-compatibility:
+    name: Test forc-${{ matrix.job.forc-version }} against fuel-core-${{ matrix.job.fuel-core-version }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false 
+      matrix: ${{ fromJSON(inputs.version-matrix) }}
+    services:
+      fuel-core:
+        image: ghcr.io/fuellabs/fuel-core:v${{ matrix.job.fuel-core-version }}
+        ports:
+          - 4000:4000
+    steps:
+      - name: Checkout Sway repo @ v${{ matrix.job.forc-version }}
+        if: ${{ steps.check-incompatibility.outputs.skip_tests != 'yes' }}
+        uses: actions/checkout@v3
+        with:
+          repository: fuellabs/sway
+          path: . 
+          ref: v${{ matrix.job.forc-version }}
+
+      - name: Test compatibility (simulate failure)
+        if: ${{ steps.check-incompatibility.outputs.skip_tests != 'yes' }}
+        id: test-compatibility
+        run: |
+          if [ "${{ matrix.job.fuel-core-version }}" = "0.9.4" ]; then
+            exit 1
+          else
+            exit 0
+          fi
+
+      - name: Create failure artifact
+        if: ${{ failure() && steps.test-compatibility.conclusion == 'failure' }}
+        run: |
+          touch incompatible-forc-${{ matrix.job.forc-version }}@fuel-core-${{ matrix.job.fuel-core-version }}
+
+      - name: Upload failure artifact
+        if: ${{ failure() && steps.test-compatibility.conclusion == 'failure' }}
+        uses: actions/upload-artifact@v3
+        with:
+          name: incompatible-forc-${{ matrix.job.forc-version }}@fuel-core-${{ matrix.job.fuel-core-version }}
+          path: incompatible-forc-${{ matrix.job.forc-version }}@fuel-core-${{ matrix.job.fuel-core-version }}
+
+      - name: Log success 
+        if: ${{ success() && steps.test-compatibility.conclusion == 'success' }}
+        run: |
+          touch compatible-forc-${{ matrix.job.forc-version }}@fuel-core-${{ matrix.job.fuel-core-version }}
+
+      - name: Upload success artifact
+        if: ${{ success() && steps.test-compatibility.conclusion == 'success' }}
+        uses: actions/upload-artifact@v3
+        with:
+          name: compatible-forc-${{ matrix.job.forc-version }}@fuel-core-${{ matrix.job.fuel-core-version }}
+          path: compatible-forc-${{ matrix.job.forc-version }}@fuel-core-${{ matrix.job.fuel-core-version }}
+
+
+  index-versions:
+    name: Log latest compatible versions that passed tests
+    needs: test-toolchain-compatibility
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - uses: actions/download-artifact@v3
+        with:
+          path: versions
+
+      - name: Prepare compatible and incompatible versions
+        working-directory: versions
+        run: |
+            COMPATIBLE_VERSIONS=$(ls compatible* -1 | sort -rV | head -n 1)
+            echo "LATEST_COMPATIBLE_FORC=$(echo $COMPATIBLE_VERSIONS | cut -d '@' -f1 | cut -d '-' -f3-)" >> $GITHUB_ENV
+            echo "LATEST_COMPATIBLE_FUEL_CORE=$(echo $COMPATIBLE_VERSIONS | cut -d '@' -f2 | cut -d '-' -f3 | rev | cut -c2- | rev)" >> $GITHUB_ENV
+
+            INCOMPATIBLE_VERSIONS=$(ls | grep 'incompatible' | cut -d '-' -f2-)
+            mkdir -p ${{ env.INCOMPATIBLE_DIR }}
+            for version in $INCOMPATIBLE_VERSIONS; do
+              touch ${{ env.INCOMPATIBLE_DIR }}/$version
+            done
+
+      - name: Prepare channel with compatible versions
+        run: |
+            touch channel-fuel-latest.toml
+            mkdir -p ${{ env.LATEST_CHANNEL_DIR }}
+            ./.github/workflows/scripts/index-versions.sh ${{ env.LATEST_COMPATIBLE_FORC }} ${{ env.LATEST_COMPATIBLE_FUEL_CORE }}
+            cp channel-fuel-latest.toml ${{ env.LATEST_CHANNEL_DIR }}
+        if: ${{ env.LATEST_COMPATIBLE_FORC && env.LATEST_COMPATIBLE_FUEL_CORE }}
+
+      - name: Deploy latest channel
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ${{ env.LATEST_CHANNEL_DIR }}
+          keep_files: true
+          destination_dir: ./
+        if: ${{ env.LATEST_COMPATIBLE_FORC && env.LATEST_COMPATIBLE_FUEL_CORE }}
+
+      - name: Deploy incompatible versions
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: versions/incompatible-versions
+          keep_files: true
+          destination_dir: ${{ env.INCOMPATIBLE_DIR }}

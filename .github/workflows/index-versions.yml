@@ -1,0 +1,58 @@
+name: Index Version Sets
+
+on:
+  push
+    # schedule:
+    # Run at minute 0 and 30 every hour
+    # - cron: '0,30 * * * *'
+env:
+  LATEST_CHANNEL_DIR: ./channel-fuel-latest.toml.d/
+
+jobs:
+  compare-versions:
+    name: Compare Versions
+    runs-on: ubuntu-latest
+    outputs:
+      should_run: ${{ steps.set-should-run.outputs.should_run }}
+      version-matrix: ${{ steps.set-version-matrix.outputs.version-matrix }}
+    steps:
+      - name: checkout master
+        uses: actions/checkout@v3
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+      - uses: Swatinem/rust-cache@v1
+      - id: set-should-run
+        run: echo "::set-output should_run=true"
+      - id: set-version-matrix
+        run: |
+          cargo install --debug --path ./.github/workflows/scripts/compare-versions
+          compare-versions >> out
+
+          VERSIONS=''
+          while read line
+          do
+            if [ -d incompatible-versions ] && [ -e incompatible-versions/$line ]; then
+              echo "incompatible: $line"
+            else
+              if [ -n "$VERSIONS" ]; then
+                VERSIONS+=','
+              fi
+              FORC_VERSION="$(echo $line | cut -d '@' -f1 | cut -d '-' -f2-)"
+              FUEL_CORE_VERSION="$(echo $line | cut -d '@' -f2- | cut -d '-' -f3-)"
+              JSON_FMT='{"forc-version":"%s","fuel-core-version":"%s"}'
+              VERSIONS+=$(printf "$JSON_FMT" "$FORC_VERSION" "$FUEL_CORE_VERSION")
+            fi
+          done < "./out"
+
+          echo $VERSIONS
+          echo "::set-output name=version-matrix::{\"job\":[$VERSIONS]}"
+
+
+  test-compatibility:
+    needs: compare-versions
+    uses: ./.github/workflows/test-toolchain-compatibility.yml
+    with:
+      version-matrix: ${{ needs.compare-versions.outputs.version-matrix }}
+    if: ${{ needs.compare-versions.outputs.version-matrix != '{\"job\":['']}' }}
