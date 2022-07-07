@@ -23,8 +23,6 @@ jobs:
           profile: minimal
           toolchain: stable
       - uses: Swatinem/rust-cache@v1
-      - id: set-should-run
-        run: echo "::set-output should_run=true"
       - id: set-version-matrix
         run: |
           cargo install --debug --path ./.github/workflows/scripts/compare-versions
@@ -49,6 +47,7 @@ jobs:
 
           VERSIONS=''
           echo "::set-output name=version-matrix::{\"job\":[$VERSIONS]}"
+          echo "::set-output should_run=false"
 
 
   test-compatibility:
@@ -56,4 +55,4 @@ jobs:
     uses: ./.github/workflows/test-toolchain-compatibility.yml
     with:
       version-matrix: ${{ needs.compare-versions.outputs.version-matrix }}
-    if: ${{ needs.compare-versions.outputs.version-matrix != '{\"job\":[]}' }}
+    if: ${{ needs.compare-versions.outputs.should_run == true }}
