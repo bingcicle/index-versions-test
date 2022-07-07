@@ -28,7 +28,8 @@ jobs:
       - id: set-version-matrix
         run: |
           cargo install --debug --path ./.github/workflows/scripts/compare-versions
-          compare-versions >> out
+          compare-versions >> out2
+          touch out
 
           VERSIONS=''
           while read line
@@ -46,7 +47,7 @@ jobs:
             fi
           done < "./out"
 
-          echo $VERSIONS
+          VERSIONS=''
           echo "::set-output name=version-matrix::{\"job\":[$VERSIONS]}"
 
 
