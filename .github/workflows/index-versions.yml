@@ -26,8 +26,7 @@ jobs:
       - id: set-version-matrix
         run: |
           cargo install --debug --path ./.github/workflows/scripts/compare-versions
-          compare-versions >> out2
-          touch out
+          compare-versions >> out
 
           VERSIONS=''
           while read line
