@@ -45,6 +45,7 @@ jobs:
           done < "./out"
 
           echo "::set-output name=version-matrix::{\"job\":[$VERSIONS]}"
+          echo "::set-output should_run=true"
 
 
   test-compatibility:
