@@ -82,10 +82,14 @@ jobs:
       - name: Prepare compatible and incompatible versions
         working-directory: versions
         run: |
-            COMPATIBLE_VERSIONS=$(ls compatible* -1 | sort -rV | head -n 1)
+            COMPATIBLE_VERSIONS=$(ls -1 | grep "compatible*" | sort -rV | head -n 1)
             echo "LATEST_COMPATIBLE_FORC=$(echo $COMPATIBLE_VERSIONS | cut -d '@' -f1 | cut -d '-' -f3-)" >> $GITHUB_ENV
             echo "LATEST_COMPATIBLE_FUEL_CORE=$(echo $COMPATIBLE_VERSIONS | cut -d '@' -f2 | cut -d '-' -f3)" >> $GITHUB_ENV
             INCOMPATIBLE_VERSIONS=$(ls | grep 'incompatible' | cut -d '-' -f2-)
+
+            echo $LATEST_COMPATIBLE_FORC
+            echo $LATEST_COMPATIBLE_FUEL_CORE
+
             mkdir -p ${{ env.INCOMPATIBLE_DIR }}
             for version in $INCOMPATIBLE_VERSIONS; do
               touch ${{ env.INCOMPATIBLE_DIR }}/$version
