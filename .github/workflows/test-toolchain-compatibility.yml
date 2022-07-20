@@ -36,7 +36,7 @@ jobs:
         if: ${{ steps.check-incompatibility.outputs.skip_tests != 'yes' }}
         id: test-compatibility
         run: |
-          if [ "${{ matrix.job.fuel-core-version }}" = "0.9.4" ]; then
+          if [ "${{ matrix.job.fuel-core-version }}" = "0.9.6" ]; then
             exit 1
           else
             exit 0
